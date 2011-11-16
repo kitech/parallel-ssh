@@ -11,7 +11,7 @@ HOST_FORMAT = 'Host format is [user[:passwd]@]host[:port] [user]'
 def read_host_files(paths, default_user=None, default_port=None):
     """Reads the given host files.
 
-    Returns a list of (host, port, user) triples.
+    Returns a list of (host, port, user, passwd) triples.
     """
     hosts = []
     if paths:
@@ -52,21 +52,23 @@ def parse_host_entry(line, default_user, default_port):
     This may take either the of the form [user@]host[:port] or
     host[:port][ user].
 
-    Returns a (host, port, user) triple.
+    Returns a (host, port, user, passwd) triple.
     """
     fields = line.split()
     if len(fields) > 2:
         sys.stderr.write('Bad line: "%s". Format should be'
                 ' [user[:passwd]@]host[:port] [user]\n' % line)
-        return None, None, None
+        return None, None, None, None
     host_field = fields[0]
     host, port, user, passwd = parse_host(host_field, default_port=default_port)
     if len(fields) == 2:
         if user is None:
             user = fields[1]
+            if ':' in user:
+                user, passwd = user.split(':')
         else:
             sys.stderr.write('User specified twice in line: "%s"\n' % line)
-            return None, None, None
+            return None, None, None, None
     if user is None:
         user = default_user
     return host, port, user, passwd
@@ -98,8 +100,11 @@ def parse_host(host, default_user=None, default_port=None):
         host, port = host.rsplit(':', 1)
     # add by <a href="mailto:liuguangzhao@users.sf.net">liuguangzhao@users.sf.net</a>   [user[:passwd]@]host[:port]
     passwd = None
-    if ':' in user:
-        user, passwd = user.split(':')
+    if user is None:
+        passwd = None
+    else:
+        if ':' in user:
+            user, passwd = user.split(':', 1)
     return (host, port, user, passwd)
 
 
