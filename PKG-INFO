@@ -1,6 +1,6 @@
 Metadata-Version: 1.0
 Name: pssh
-Version: 2.2
+Version: 2.2.2
 Summary: Parallel version of OpenSSH and related tools
 Home-page: http://code.google.com/p/parallel-ssh/
 Author: Andrew McNabb
@@ -17,9 +17,11 @@ Classifier: Programming Language :: Python :: 2
 Classifier: Programming Language :: Python :: 2.4
 Classifier: Programming Language :: Python :: 2.5
 Classifier: Programming Language :: Python :: 2.6
+Classifier: Programming Language :: Python :: 2.7
 Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.0
 Classifier: Programming Language :: Python :: 3.1
+Classifier: Programming Language :: Python :: 3.2
 Classifier: Topic :: Software Development :: Libraries :: Python Modules
 Classifier: Topic :: System :: Clustering
 Classifier: Topic :: System :: Networking
