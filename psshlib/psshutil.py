@@ -42,7 +42,12 @@ def read_hosts(pathnames, default_user=None, default_port=None):
         else:
             sys.stderr.write("Bad line. Must be host[:port] [login]\n")
             sys.exit(3)
-        hosts.append((host, port, user))
+        # add by liuguangzhao@users.sf.net   host[:port] [login[:passwd]]
+        passwd = None
+        user_fields = user.split(':')
+        if len(user_fields) == 2:
+            user, passwd = user_fields
+        hosts.append((host, port, user, passwd))
     return hosts
 
 def parse_host(host, default_user=None, default_port=None):
@@ -54,4 +59,8 @@ def parse_host(host, default_user=None, default_port=None):
         user, host = host.split('@', 1)
     if ':' in host:
         host, port = host.rsplit(':', 1)
-    return (host, port, user)
+    # add by liuguangzhao@users.sf.net   [user[:passwd]@]host[:port]
+    passwd = None
+    if ':' in user:
+        user, passwd = user.split(':')
+    return (host, port, user, passwd)

@@ -51,8 +51,11 @@ def do_pnuke(hosts, pattern, opts):
     if opts.errdir and not os.path.exists(opts.errdir):
         os.makedirs(opts.errdir)
     manager = Manager(opts)
-    for host, port, user in hosts:
+    for host, port, user, passwd in hosts:
         cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1']
+        if passwd != None:
+            cmd = ['sshpass', '-p', passwd, 'ssh', host, '-o', 'NumberOfPasswordPrompts=1']
+        
         if not opts.verbose:
             cmd.append('-q')
         if opts.options:

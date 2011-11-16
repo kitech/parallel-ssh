@@ -90,9 +90,16 @@ def do_pssh(hosts, cmdline, opts):
             sys.stderr.write('Automatic reading from stdin is deprecated.  '
                     'Please use the -I option.\n')
     manager = Manager(opts)
-    for host, port, user in hosts:
-        cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1',
-                '-o', 'SendEnv=PSSH_NODENUM']
+    for host, port, user, passwd in hosts:
+        if passwd == None:
+            cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1',
+                   '-o', 'SendEnv=PSSH_NODENUM']
+            # sys.stderr.write('using standard ssh method\n')
+        else:
+            cmd = ['sshpass', '-p', passwd, 'ssh', host, '-o', 'NumberOfPasswordPrompts=1',
+                   '-o', 'SendEnv=PSSH_NODENUM']
+            # sys.stderr.write('using sshpass method\n')
+
         if not opts.verbose:
             cmd.append('-q')
         if opts.options:
