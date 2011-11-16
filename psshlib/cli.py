@@ -3,11 +3,13 @@
 
 import optparse
 import os
-import pwd
 import shlex
+import sys
+import textwrap
 
 _DEFAULT_PARALLELISM = 32
-_DEFAULT_TIMEOUT     = -1 # "infinity" by default
+_DEFAULT_TIMEOUT     = 0 # "infinity" by default
+
 
 def common_parser():
     """
@@ -21,10 +23,11 @@ def common_parser():
     parser.epilog = "Example: pssh -h nodes.txt -l irb2 -o /tmp/foo uptime"
 
     parser.add_option('-h', '--hosts', dest='host_files', action='append',
-            help='hosts file (each line "host[:port] [user]")')
-    parser.add_option('-H', '--host', dest='host_entries', action='append',
-            metavar='HOST_ENTRY',
-            help='additional host entry ("[user@]host[:port]")')
+            metavar='HOST_FILE',
+            help='hosts file (each line "[user@]host[:port]")')
+    parser.add_option('-H', '--host', dest='host_strings', action='append',
+            metavar='HOST_STRING',
+            help='additional host entries ("[user@]host[:port]")')
     parser.add_option('-l', '--user', dest='user',
             help='username (OPTIONAL)')
     parser.add_option('-p', '--par', dest='par', type='int',
@@ -34,9 +37,9 @@ def common_parser():
     parser.add_option('-e', '--errdir', dest='errdir',
             help='output directory for stderr files (OPTIONAL)')
     parser.add_option('-t', '--timeout', dest='timeout', type='int',
-            help='timeout (secs) (-1 = no timeout) per host (OPTIONAL)')
-    parser.add_option('-O', '--options', dest='options',
-            help='SSH options (OPTIONAL)')
+            help='timeout (secs) (0 = no timeout) per host (OPTIONAL)')
+    parser.add_option('-O', '--option', dest='options', action='append',
+            metavar='OPTION', help='SSH option (OPTIONAL)')
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true',
             help='turn on warning and diagnostic messages (OPTIONAL)')
     parser.add_option('-A', '--askpass', dest='askpass', action='store_true',
@@ -50,6 +53,7 @@ def common_parser():
 
     return parser
 
+
 def common_defaults(**kwargs):
     defaults = dict(par=_DEFAULT_PARALLELISM, timeout=_DEFAULT_TIMEOUT)
     defaults.update(**kwargs)
@@ -58,7 +62,6 @@ def common_defaults(**kwargs):
             ('outdir', 'PSSH_OUTDIR'),
             ('errdir', 'PSSH_ERRDIR'),
             ('timeout', 'PSSH_TIMEOUT'),
-            ('options', 'PSSH_OPTIONS'),
             ('verbose', 'PSSH_VERBOSE'),
             ('print_out', 'PSSH_PRINT'),
             ('askpass', 'PSSH_ASKPASS'),
@@ -73,11 +76,24 @@ def common_defaults(**kwargs):
         if value:
             defaults[option] = value
 
+    value = os.getenv('PSSH_OPTIONS')
+    if value:
+        defaults['options'] = [value]
+
     value = os.getenv('PSSH_HOSTS')
     if value:
+        message1 = ('Warning: the PSSH_HOSTS environment variable is '
+            'deprecated.  Please use the "-h" option instead, and consider '
+            'creating aliases for convenience.  For example:')
+        message2 = "    alias pssh_abc='pssh -h /path/to/hosts_abc'"
+        sys.stderr.write(textwrap.fill(message1))
+        sys.stderr.write('\n')
+        sys.stderr.write(message2)
+        sys.stderr.write('\n')
         defaults['host_files'] = [value]
 
     return defaults
+
 
 def shlex_append(option, opt_str, value, parser):
     """An optparse callback similar to the append action.

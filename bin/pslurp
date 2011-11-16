@@ -52,7 +52,7 @@ def parse_args():
     if len(args) > 2:
         parser.error('Extra arguments given after the local path.')
 
-    if not opts.host_files and not opts.host_entries:
+    if not opts.host_files and not opts.host_strings:
         parser.error('Hosts not specified.')
 
     return opts, args
@@ -79,7 +79,8 @@ def do_pslurp(hosts, remote, local, opts):
             localpath = "%s/%s" % (host, local)
         cmd = ['scp', '-qC']
         if opts.options:
-            cmd += ['-o', opts.options]
+            for opt in opts.options:
+                cmd += ['-o', opt]
         if port:
             cmd += ['-P', port]
         if opts.recursive:
@@ -93,8 +94,21 @@ def do_pslurp(hosts, remote, local, opts):
         cmd.append(localpath)
         t = Task(host, port, user, cmd, opts)
         manager.add_task(t)
-    manager.run()
+    try:
+        statuses = manager.run()
+    except FatalError:
+        sys.exit(1)
 
+    if min(statuses) < 0:
+        # At least one process was killed.
+        sys.exit(3)
+    for status in statuses:
+        if status == 255:
+            sys.exit(4)
+    for status in statuses:
+        if status != 0:
+            sys.exit(5)
+   
 if __name__ == "__main__":
     opts, args = parse_args()
     remote = args[0]
@@ -102,8 +116,14 @@ if __name__ == "__main__":
     if not re.match("^/", remote):
         print("Remote path %s must be an absolute path" % remote)
         sys.exit(3)
-    hosts = psshutil.read_hosts(opts.host_files, default_user=opts.user)
-    if opts.host_entries:
-        for entry in opts.host_entries:
-            hosts.append(psshutil.parse_host(entry, default_user=opts.user))
+    try:
+        hosts = psshutil.read_host_files(opts.host_files,
+            default_user=opts.user)
+    except IOError:
+        _, e, _ = sys.exc_info()
+        sys.stderr.write('Could not open hosts file: %s\n' % e.strerror)
+        sys.exit(1)
+    if opts.host_strings:
+        for s in opts.host_strings:
+            hosts.extend(psshutil.parse_host_string(s, default_user=opts.user))
     do_pslurp(hosts, remote, local, opts)

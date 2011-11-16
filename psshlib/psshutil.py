@@ -1,57 +1,94 @@
 # Copyright (c) 2009, Andrew McNabb
 # Copyright (c) 2003-2008, Brent N. Chun
 
-import re
+import fcntl
+import string
 import sys
 
-def read_hosts(pathnames, default_user=None, default_port=None):
+HOST_FORMAT = 'Host format is [user@]host[:port] [user]'
+
+
+def read_host_files(paths, default_user=None, default_port=None):
+    """Reads the given host files.
+
+    Returns a list of (host, port, user) triples.
     """
-    Read hostfiles specified by the given pathnames with lines of the form:
-    host[:port] [login]. Return three arrays: hosts, ports, and users.  These
-    can be used directly for all ssh-based commands (e.g., ssh, scp, rsync -e
-    ssh, etc.)
+    hosts = []
+    if paths:
+        for path in paths:
+            hosts.extend(read_host_file(path))
+    return hosts
+
+
+def read_host_file(path, default_user=None, default_port=None):
+    """Reads the given host file.
+
+    Lines are of the form: host[:port] [login].
+    Returns a list of (host, port, user) triples.
     """
     lines = []
-    if not pathnames:
-        return lines
-    for pathname in pathnames:
-        f = open(pathname)
-        for line in f:
-            lines.append(line.strip())
-        f.close()
+    f = open(path)
+    for line in f:
+        lines.append(line.strip())
+    f.close()
+
     hosts = []
     for line in lines:
         # Skip blank lines or lines starting with #
+        line = line.strip()
         if not line or line.startswith('#'):
             continue
-        fields = line.split()
-        if len(fields) == 1:
-            addr = line
-            user = default_user
-        elif len(fields) == 2:
-            addr, user = fields
-        else:
-            sys.stderr.write("Bad line. Must be host[:port] [login]\n")
-            sys.exit(3)
-        addr_fields = addr.split(':')
-        if len(addr_fields) == 1:
-            host = addr
-            port = default_port
-        elif len(addr_fields) == 2:
-            host, port = addr_fields
-        else:
-            sys.stderr.write("Bad line. Must be host[:port] [login]\n")
-            sys.exit(3)
-        # add by liuguangzhao@users.sf.net   host[:port] [login[:passwd]]
-        passwd = None
-        user_fields = user.split(':')
-        if len(user_fields) == 2:
-            user, passwd = user_fields
-        hosts.append((host, port, user, passwd))
+        host, port, user = parse_host_entry(line, default_user, default_port)
+        if host:
+            hosts.append((host, port, user))
     return hosts
 
+
+# TODO: deprecate the second host field and standardize on the
+# [user@]host[:port] format.
+def parse_host_entry(line, default_user, default_port):
+    """Parses a single host entry.
+
+    This may take either the of the form [user@]host[:port] or
+    host[:port][ user].
+
+    Returns a (host, port, user) triple.
+    """
+    fields = line.split()
+    if len(fields) > 2:
+        sys.stderr.write('Bad line: "%s". Format should be'
+                ' [user@]host[:port] [user]\n' % line)
+        return None, None, None
+    host_field = fields[0]
+    host, port, user = parse_host(host_field, default_port=default_port)
+    if len(fields) == 2:
+        if user is None:
+            user = fields[1]
+        else:
+            sys.stderr.write('User specified twice in line: "%s"\n' % line)
+            return None, None, None
+    if user is None:
+        user = default_user
+    return host, port, user
+
+
+def parse_host_string(host_string, default_user=None, default_port=None):
+    """Parses a whitespace-delimited string of "[user@]host[:port]" entries.
+
+    Returns a list of (host, port, user) triples.
+    """
+    hosts = []
+    entries = host_string.split()
+    for entry in entries:
+        hosts.append(parse_host(entry, default_user, default_port))
+    return hosts
+
+
 def parse_host(host, default_user=None, default_port=None):
-    """Parses host entries of the form "[user@]host[:port]"."""
+    """Parses host entries of the form "[user@]host[:port]".
+
+    Returns a (host, port, user) triple.
+    """
     # TODO: when we stop supporting Python 2.4, switch to using str.partition.
     user = default_user
     port = default_port
@@ -59,8 +96,13 @@ def parse_host(host, default_user=None, default_port=None):
         user, host = host.split('@', 1)
     if ':' in host:
         host, port = host.rsplit(':', 1)
-    # add by liuguangzhao@users.sf.net   [user[:passwd]@]host[:port]
-    passwd = None
-    if ':' in user:
-        user, passwd = user.split(':')
-    return (host, port, user, passwd)
+    return (host, port, user)
+
+
+def set_cloexec(filelike):
+    """Sets the underlying filedescriptor to automatically close on exec.
+
+    If set_cloexec is called for all open files, then subprocess.Popen does
+    not require the close_fds option.
+    """
+    fcntl.fcntl(filelike.fileno(), fcntl.FD_CLOEXEC, 1)

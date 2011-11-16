@@ -54,10 +54,22 @@ def executable_path():
 
 def askpass_main():
     """Connects to pssh over the socket specified at PSSH_ASKPASS_SOCKET."""
+
+    # It's not documented anywhere, as far as I can tell, but ssh may prompt
+    # for a password or ask a yes/no question.  The command-line argument
+    # specifies what is needed.
+    if len(sys.argv) > 1:
+        prompt = sys.argv[1]
+        if not prompt.lower().endswith('password: '):
+            sys.stderr.write(prompt)
+            sys.stderr.write('\n')
+            sys.exit(1)
+
     address = os.getenv('PSSH_ASKPASS_SOCKET')
     if not address:
-        sys.stderr.write(textwrap.fill("Permission denied.  Please create"
-                " SSH keys or use the -A option to provide a password."))
+        sys.stderr.write(textwrap.fill("pssh error: SSH requested a password."
+                " Please create SSH keys or use the -A option to provide a"
+                " password."))
         sys.stderr.write('\n')
         sys.exit(1)
 
@@ -66,7 +78,7 @@ def askpass_main():
         sock.connect(address)
     except socket.error:
         _, e, _ = sys.exc_info()
-        number, message = e.args
+        message = e.args[1]
         sys.stderr.write("Couldn't bind to %s: %s.\n" % (address, message))
         sys.exit(2)
 

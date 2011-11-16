@@ -13,14 +13,21 @@ except ImportError:
     import Queue as queue
 
 from psshlib.askpass_server import PasswordServer
+from psshlib import psshutil
 
 READ_SIZE = 1 << 16
+
+
+class FatalError(RuntimeError):
+    """A fatal error in the PSSH Manager."""
+    pass
 
 
 class Manager(object):
     """Executes tasks concurrently.
 
     Tasks are added with add_task() and executed in parallel with run().
+    Returns a list of the exit statuses of the processes.
 
     Arguments:
         limit: Maximum number of commands running at once.
@@ -81,6 +88,9 @@ class Manager(object):
             writer.signal_quit()
             writer.join()
 
+        statuses = [task.exitstatus for task in self.done]
+        return statuses
+
     def clear_sigchld_handler(self):
         signal.signal(signal.SIGCHLD, signal.SIG_DFL)
 
@@ -89,6 +99,8 @@ class Manager(object):
         # signal handler is used (I'm pretty sure it doesn't work if the
         # signal is ignored).
         signal.signal(signal.SIGCHLD, self.handle_sigchld)
+        # This should keep reads and writes from getting EINTR.
+        signal.siginterrupt(signal.SIGCHLD, False)
 
     def handle_sigchld(self, number, frame):
         """Apparently we need a sigchld handler to make set_wakeup_fd work."""
@@ -229,7 +241,7 @@ class IOMap(object):
             rlist, wlist, _ = select.select(rlist, wlist, [], timeout)
         except select.error:
             _, e, _ = sys.exc_info()
-            errno, message = e.args
+            errno = e.args[0]
             if errno == EINTR:
                 return
             else:
@@ -254,7 +266,7 @@ class IOMap(object):
             if errno != EINTR:
                 sys.stderr.write('Fatal error reading from wakeup pipe: %s\n'
                         % message)
-                sys.exit(-1)
+                raise FatalError
 
 
 class Writer(threading.Thread):
@@ -287,6 +299,7 @@ class Writer(threading.Thread):
 
             if data == self.OPEN:
                 self.files[filename] = open(filename, 'wb', buffering=1)
+                psshutil.set_cloexec(self.files[filename])
             else:
                 dest = self.files[filename]
                 if data == self.EOF:

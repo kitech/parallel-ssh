@@ -21,7 +21,7 @@ if os.path.exists(os.path.join(parent, 'psshlib')):
     sys.path.insert(0, parent)
 
 from psshlib import psshutil
-from psshlib.manager import Manager
+from psshlib.manager import Manager, FatalError
 from psshlib.task import Task
 from psshlib.cli import common_parser, common_defaults
 
@@ -32,13 +32,13 @@ def option_parser():
     parser.usage = "%prog [OPTIONS] command [...]"
     parser.epilog = "Example: pssh -h hosts.txt -l irb2 -o /tmp/foo uptime"
 
-    parser.add_option('-P', '--print', dest='print_out', action='store_true',
-            help='print output as we get it')
     parser.add_option('-i', '--inline', dest='inline', action='store_true',
             help='inline aggregated output for each server')
     parser.add_option('-I', '--send-input', dest='send_input',
             action='store_true',
             help='read from standard input and send as input to ssh')
+    parser.add_option('-P', '--print', dest='print_out', action='store_true',
+            help='print output as we get it')
 
     return parser
 
@@ -51,31 +51,10 @@ def parse_args():
     if len(args) == 0 and not opts.send_input:
         parser.error('Command not specified.')
 
-    if not opts.host_files and not opts.host_entries:
+    if not opts.host_files and not opts.host_strings:
         parser.error('Hosts not specified.')
 
     return opts, args
-
-def buffer_input():
-    """Read any immediately available data from standard input.
-
-    Doesn't work if stdin blocks for any reason.  This needs to be deprecated.
-    """
-    fileno = sys.stdin.fileno()
-    origfl = fcntl.fcntl(fileno, fcntl.F_GETFL)
-    fcntl.fcntl(fileno, fcntl.F_SETFL, origfl | os.O_NONBLOCK)
-    try:
-        # Python 3
-        read_stdin = sys.stdin.buffer.read
-    except AttributeError:
-        # Python 2
-        read_stdin = sys.stdin.read
-    try:
-        stdin = read_stdin()
-    except IOError: # Stdin contained no information
-        stdin = ""
-    fcntl.fcntl(fileno, fcntl.F_SETFL, origfl)
-    return stdin
 
 def do_pssh(hosts, cmdline, opts):
     if opts.outdir and not os.path.exists(opts.outdir):
@@ -85,25 +64,14 @@ def do_pssh(hosts, cmdline, opts):
     if opts.send_input:
         stdin = sys.stdin.read()
     else:
-        stdin = buffer_input()
-        if stdin:
-            sys.stderr.write('Automatic reading from stdin is deprecated.  '
-                    'Please use the -I option.\n')
+        stdin = None
     manager = Manager(opts)
-    for host, port, user, passwd in hosts:
-        if passwd == None:
-            cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1',
-                   '-o', 'SendEnv=PSSH_NODENUM']
-            # sys.stderr.write('using standard ssh method\n')
-        else:
-            cmd = ['sshpass', '-p', passwd, 'ssh', host, '-o', 'NumberOfPasswordPrompts=1',
-                   '-o', 'SendEnv=PSSH_NODENUM']
-            # sys.stderr.write('using sshpass method\n')
-
-        if not opts.verbose:
-            cmd.append('-q')
+    for host, port, user in hosts:
+        cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1',
+                '-o', 'SendEnv=PSSH_NODENUM']
         if opts.options:
-            cmd += ['-o', opts.options]
+            for opt in opts.options:
+                cmd += ['-o', opt]
         if user:
             cmd += ['-l', user]
         if port:
@@ -114,13 +82,34 @@ def do_pssh(hosts, cmdline, opts):
             cmd.append(cmdline)
         t = Task(host, port, user, cmd, opts, stdin)
         manager.add_task(t)
-    manager.run()
+    try:
+        statuses = manager.run()
+    except FatalError:
+        sys.exit(1)
+
+    if min(statuses) < 0:
+        # At least one process was killed.
+        sys.exit(3)
+    # The any builtin was introduced in Python 2.5 (so we can't use it yet):
+    #elif any(x==255 for x in statuses):
+    for status in statuses:
+        if status == 255:
+            sys.exit(4)
+    for status in statuses:
+        if status != 0:
+            sys.exit(5)
    
 if __name__ == "__main__":
     opts, args = parse_args()
     cmdline = " ".join(args)
-    hosts = psshutil.read_hosts(opts.host_files, default_user=opts.user)
-    if opts.host_entries:
-        for entry in opts.host_entries:
-            hosts.append(psshutil.parse_host(entry, default_user=opts.user))
+    try:
+        hosts = psshutil.read_host_files(opts.host_files,
+            default_user=opts.user)
+    except IOError:
+        _, e, _ = sys.exc_info()
+        sys.stderr.write('Could not open hosts file: %s\n' % e.strerror)
+        sys.exit(1)
+    if opts.host_strings:
+        for s in opts.host_strings:
+            hosts.extend(psshutil.parse_host_string(s, default_user=opts.user))
     do_pssh(hosts, cmdline, opts)

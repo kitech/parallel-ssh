@@ -1,6 +1,6 @@
 Metadata-Version: 1.0
 Name: pssh
-Version: 2.1.1
+Version: 2.2
 Summary: Parallel version of OpenSSH and related tools
 Home-page: http://code.google.com/p/parallel-ssh/
 Author: Andrew McNabb

@@ -20,8 +20,14 @@ except NameError:
 
 
 class Task(object):
-    """Starts a process and manages its input and output."""
+    """Starts a process and manages its input and output.
+    
+    Upon completion, the `exitstatus` attribute is set to the exit status
+    of the process.
+    """
     def __init__(self, host, port, user, cmd, opts, stdin=None):
+        self.exitstatus = None
+
         self.host = host
         self.pretty_host = host
         self.port = port
@@ -38,6 +44,7 @@ class Task(object):
         self.failures = []
         self.killed = False
         self.inputbuffer = stdin
+        self.byteswritten = 0
         self.outputbuffer = bytes()
         self.errorbuffer = bytes()
 
@@ -79,9 +86,10 @@ class Task(object):
         if 'DISPLAY' not in environ:
             environ['DISPLAY'] = 'pssh-gibberish'
 
-        # Create the subprocess.
+        # Create the subprocess.  Since we carefully call set_cloexec() on
+        # all open files, we specify close_fds=False.
         self.proc = Popen(self.cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE,
-                close_fds=True, preexec_fn=os.setsid, env=environ)
+                close_fds=False, preexec_fn=os.setsid, env=environ)
         self.timestamp = time.time()
         if self.inputbuffer:
             self.stdin = self.proc.stdin
@@ -128,18 +136,20 @@ class Task(object):
         if self.stdin or self.stdout or self.stderr:
             return True
         if self.proc:
-            self.returncode = self.proc.poll()
-            if self.returncode is None:
+            self.exitstatus = self.proc.poll()
+            if self.exitstatus is None:
                 if self.killed:
+                    # Set the exitstatus to what it would be if we waited.
+                    self.exitstatus = -signal.SIGKILL
                     return False
                 else:
                     return True
             else:
-                if self.returncode < 0:
-                    message = 'Killed by signal %s' % (-self.returncode)
+                if self.exitstatus < 0:
+                    message = 'Killed by signal %s' % (-self.exitstatus)
                     self.failures.append(message)
-                elif self.returncode > 0:
-                    message = 'Exited with error code %s' % self.returncode
+                elif self.exitstatus > 0:
+                    message = 'Exited with error code %s' % self.exitstatus
                     self.failures.append(message)
                 self.proc = None
                 return False
@@ -147,9 +157,10 @@ class Task(object):
     def handle_stdin(self, fd, iomap):
         """Called when the process's standard input is ready for writing."""
         try:
-            if self.inputbuffer:
-                bytes_written = os.write(fd, self.inputbuffer)
-                self.inputbuffer = self.inputbuffer[bytes_written:]
+            start = self.byteswritten
+            if start < len(self.inputbuffer):
+                chunk = self.inputbuffer[start:start+BUFFER_SIZE]
+                self.byteswritten = start + os.write(fd, chunk)
             else:
                 self.close_stdin(iomap)
         except (OSError, IOError):
@@ -245,10 +256,7 @@ class Task(object):
             success = "[SUCCESS]"
             failure = "[FAILURE]"
             stderr = "Stderr: "
-        if self.port:
-            host = '%s:%s' % (self.host, self.port)
-        else:
-            host = self.host
+        host = self.pretty_host
         if self.failures:
             print(' '.join((progress, tstamp, failure, host, error)))
         else:
