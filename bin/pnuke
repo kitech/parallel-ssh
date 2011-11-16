@@ -51,8 +51,16 @@ def do_pnuke(hosts, pattern, opts):
     if opts.errdir and not os.path.exists(opts.errdir):
         os.makedirs(opts.errdir)
     manager = Manager(opts)
-    for host, port, user in hosts:
-        cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1']
+    # for host, port, user in hosts:
+    #    cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1']
+    for host, port, user, passwd in hosts:
+        if passwd == None:
+            cmd = ['scp', '-qC']
+            # sys.stderr.write('using standard scp method\n')
+        else:
+            cmd = ['sshpass', '-p', passwd, 'scp', '-qC']
+            # sys.stderr.write('using sshpass scp method\n')
+
         if opts.options:
             for opt in opts.options:
                 cmd += ['-o', opt]

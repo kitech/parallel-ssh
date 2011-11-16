@@ -5,7 +5,7 @@ import fcntl
 import string
 import sys
 
-HOST_FORMAT = 'Host format is [user@]host[:port] [user]'
+HOST_FORMAT = 'Host format is [user[:passwd]@]host[:port] [user]'
 
 
 def read_host_files(paths, default_user=None, default_port=None):
@@ -38,9 +38,9 @@ def read_host_file(path, default_user=None, default_port=None):
         line = line.strip()
         if not line or line.startswith('#'):
             continue
-        host, port, user = parse_host_entry(line, default_user, default_port)
+        host, port, user, passwd = parse_host_entry(line, default_user, default_port)
         if host:
-            hosts.append((host, port, user))
+            hosts.append((host, port, user, passwd))
     return hosts
 
 
@@ -57,10 +57,10 @@ def parse_host_entry(line, default_user, default_port):
     fields = line.split()
     if len(fields) > 2:
         sys.stderr.write('Bad line: "%s". Format should be'
-                ' [user@]host[:port] [user]\n' % line)
+                ' [user[:passwd]@]host[:port] [user]\n' % line)
         return None, None, None
     host_field = fields[0]
-    host, port, user = parse_host(host_field, default_port=default_port)
+    host, port, user, passwd = parse_host(host_field, default_port=default_port)
     if len(fields) == 2:
         if user is None:
             user = fields[1]
@@ -69,7 +69,7 @@ def parse_host_entry(line, default_user, default_port):
             return None, None, None
     if user is None:
         user = default_user
-    return host, port, user
+    return host, port, user, passwd
 
 
 def parse_host_string(host_string, default_user=None, default_port=None):
@@ -85,7 +85,7 @@ def parse_host_string(host_string, default_user=None, default_port=None):
 
 
 def parse_host(host, default_user=None, default_port=None):
-    """Parses host entries of the form "[user@]host[:port]".
+    """Parses host entries of the form "[user[:passwd]@]host[:port]".
 
     Returns a (host, port, user) triple.
     """
@@ -96,7 +96,11 @@ def parse_host(host, default_user=None, default_port=None):
         user, host = host.split('@', 1)
     if ':' in host:
         host, port = host.rsplit(':', 1)
-    return (host, port, user)
+    # add by <a href="mailto:liuguangzhao@users.sf.net">liuguangzhao@users.sf.net</a>   [user[:passwd]@]host[:port]
+    passwd = None
+    if ':' in user:
+        user, passwd = user.split(':')
+    return (host, port, user, passwd)
 
 
 def set_cloexec(filelike):

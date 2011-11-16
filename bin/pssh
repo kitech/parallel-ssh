@@ -66,9 +66,19 @@ def do_pssh(hosts, cmdline, opts):
     else:
         stdin = None
     manager = Manager(opts)
-    for host, port, user in hosts:
-        cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1',
-                '-o', 'SendEnv=PSSH_NODENUM']
+    # for host, port, user in hosts:
+    #     cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1',
+    #             '-o', 'SendEnv=PSSH_NODENUM']
+    for host, port, user, passwd in hosts:
+        if passwd == None:
+            cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1',
+                   '-o', 'SendEnv=PSSH_NODENUM']
+            # sys.stderr.write('using standard ssh method\n')
+        else:
+            cmd = ['sshpass', '-p', passwd, 'ssh', host, '-o', 'NumberOfPasswordPrompts=1',
+                   '-o', 'SendEnv=PSSH_NODENUM']
+            # sys.stderr.write('using sshpass method\n')
+
         if opts.options:
             for opt in opts.options:
                 cmd += ['-o', opt]
