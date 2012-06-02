@@ -1,4 +1,4 @@
-# Copyright (c) 2009, Andrew McNabb
+# Copyright (c) 2009-2012, Andrew McNabb
 
 from errno import EINTR
 import os
@@ -112,7 +112,7 @@ class Manager(object):
         for task in self.running:
             if task.proc:
                 task.proc.poll()
-        # Apparently some UNIX systems automatically resent the SIGCHLD
+        # Apparently some UNIX systems automatically reset the SIGCHLD
         # handler to SIG_DFL.  Reset it just in case.
         self.set_sigchld_handler()
 
@@ -307,6 +307,7 @@ class Writer(threading.Thread):
                     dest.close()
                 else:
                     dest.write(data)
+                    dest.flush()
 
     def open_files(self, host):
         """Called from another thread to create files for stdout and stderr.

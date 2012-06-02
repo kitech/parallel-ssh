@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- Mode: python -*-
 
-# Copyright (c) 2009, Andrew McNabb
+# Copyright (c) 2009-2012, Andrew McNabb
 # Copyright (c) 2003-2008, Brent N. Chun
 
 """Parallel ssh to the set of nodes in hosts.txt.
@@ -29,11 +29,14 @@ _DEFAULT_TIMEOUT = 60
 
 def option_parser():
     parser = common_parser()
-    parser.usage = "%prog [OPTIONS] command [...]"
+    parser.usage = "%prog [OPTIONS] -h hosts.txt command [...]"
     parser.epilog = "Example: pssh -h hosts.txt -l irb2 -o /tmp/foo uptime"
 
     parser.add_option('-i', '--inline', dest='inline', action='store_true',
-            help='inline aggregated output for each server')
+            help='inline aggregated output and error for each server')
+    parser.add_option('--inline-stdout', dest='inline_stdout',
+            action='store_true',
+            help='inline standard output for each server')
     parser.add_option('-I', '--send-input', dest='send_input',
             action='store_true',
             help='read from standard input and send as input to ssh')
@@ -68,7 +71,7 @@ def do_pssh(hosts, cmdline, opts):
     manager = Manager(opts)
     # for host, port, user in hosts:
     #     cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1',
-    #             '-o', 'SendEnv=PSSH_NODENUM']
+    #             '-o', 'SendEnv=PSSH_NODENUM PSSH_HOST']
     for host, port, user, passwd in hosts:
         if passwd == None:
             cmd = ['ssh', host, '-o', 'NumberOfPasswordPrompts=1',
@@ -76,7 +79,7 @@ def do_pssh(hosts, cmdline, opts):
             # sys.stderr.write('using standard ssh method\n')
         else:
             cmd = ['sshpass', '-p', passwd, 'ssh', host, '-o', 'NumberOfPasswordPrompts=1',
-                   '-o', 'SendEnv=PSSH_NODENUM']
+                   '-o', 'SendEnv=PSSH_NODENUM PSSH_HOST']
             # sys.stderr.write('using sshpass method\n')
 
         if opts.options:
@@ -108,7 +111,7 @@ def do_pssh(hosts, cmdline, opts):
     for status in statuses:
         if status != 0:
             sys.exit(5)
-   
+
 if __name__ == "__main__":
     opts, args = parse_args()
     cmdline = " ".join(args)

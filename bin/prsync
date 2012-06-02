@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- Mode: python -*-
 
-# Copyright (c) 2009, Andrew McNabb
+# Copyright (c) 2009-2012, Andrew McNabb
 # Copyright (c) 2003-2008, Brent N. Chun
 
 """Parallel rsync to the set of nodes in hosts.txt.
@@ -78,7 +78,8 @@ def do_prsync(hosts, local, remote, opts):
             # sys.stderr.write('using sshpass method\n')
 
         if opts.options:
-            ssh += ['-o', opts.options]
+            for opt in opts.options:
+                ssh += ['-o', opt]
         if port:
             ssh += ['-p', port]
         if opts.ssh_args:
@@ -95,7 +96,7 @@ def do_prsync(hosts, local, remote, opts):
             cmd.append('-z')
         if opts.extra:
             cmd.extend(opts.extra)
-        cmd.append(local)
+        cmd.extend(local)
         if user:
             cmd.append('%s@%s:%s' % (user, host, remote))
         else:
@@ -116,11 +117,8 @@ def do_prsync(hosts, local, remote, opts):
 
 if __name__ == "__main__":
     opts, args = parse_args()
-    local = args[0]
-    remote = args[1]
-    if not re.match("^/", remote):
-        print("Remote path %s must be an absolute path" % remote)
-        sys.exit(3)
+    local = args[0:-1]
+    remote = args[-1]
     try:
         hosts = psshutil.read_host_files(opts.host_files,
             default_user=opts.user)

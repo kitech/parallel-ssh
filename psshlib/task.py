@@ -1,4 +1,4 @@
-# Copyright (c) 2009, Andrew McNabb
+# Copyright (c) 2009-2012, Andrew McNabb
 
 from errno import EINTR
 from subprocess import Popen, PIPE
@@ -21,7 +21,7 @@ except NameError:
 
 class Task(object):
     """Starts a process and manages its input and output.
-    
+
     Upon completion, the `exitstatus` attribute is set to the exit status
     of the process.
     """
@@ -64,6 +64,10 @@ class Task(object):
             self.inline = bool(opts.inline)
         except AttributeError:
             self.inline = False
+        try:
+            self.inline_stdout = bool(opts.inline_stdout)
+        except AttributeError:
+            self.inline_stdout = False
 
     def start(self, nodenum, iomap, writer, askpass_socket=None):
         """Starts the process and registers files with the IOMap."""
@@ -75,12 +79,15 @@ class Task(object):
         # Set up the environment.
         environ = dict(os.environ)
         environ['PSSH_NODENUM'] = str(nodenum)
+        environ['PSSH_HOST'] = self.host
         # Disable the GNOME pop-up password dialog and allow ssh to use
         # askpass.py to get a provided password.  If the module file is
         # askpass.pyc, we replace the extension.
         environ['SSH_ASKPASS'] = askpass_client.executable_path()
         if askpass_socket:
             environ['PSSH_ASKPASS_SOCKET'] = askpass_socket
+        if self.verbose:
+            environ['PSSH_ASKPASS_VERBOSE'] = '1'
         # Work around a mis-feature in ssh where it won't call SSH_ASKPASS
         # if DISPLAY is unset.
         if 'DISPLAY' not in environ:
@@ -180,7 +187,7 @@ class Task(object):
         try:
             buf = os.read(fd, BUFFER_SIZE)
             if buf:
-                if self.inline:
+                if self.inline or self.inline_stdout:
                     self.outputbuffer += buf
                 if self.outfile:
                     self.writer.write(self.outfile, buf)

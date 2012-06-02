@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- Mode: python -*-
 
-# Copyright (c) 2009, Andrew McNabb
+# Copyright (c) 2009-2012, Andrew McNabb
 
 """Implementation of SSH_ASKPASS to get a password to ssh from pssh.
 
@@ -55,15 +55,22 @@ def executable_path():
 def askpass_main():
     """Connects to pssh over the socket specified at PSSH_ASKPASS_SOCKET."""
 
+    verbose = os.getenv('PSSH_ASKPASS_VERBOSE')
+
     # It's not documented anywhere, as far as I can tell, but ssh may prompt
     # for a password or ask a yes/no question.  The command-line argument
     # specifies what is needed.
     if len(sys.argv) > 1:
         prompt = sys.argv[1]
-        if not prompt.lower().endswith('password: '):
+        if verbose:
+            sys.stderr.write('pssh-askpass received prompt: "%s"\n' % prompt)
+        if not prompt.strip().lower().endswith('password:'):
             sys.stderr.write(prompt)
             sys.stderr.write('\n')
             sys.exit(1)
+    else:
+        sys.stderr.write('Error: pssh-askpass called without a prompt.\n')
+        sys.exit(1)
 
     address = os.getenv('PSSH_ASKPASS_SOCKET')
     if not address:
